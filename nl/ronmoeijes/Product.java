@@ -1,45 +1,72 @@
 package nl.ronmoeijes;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
 
 import static nl.ronmoeijes.Main.DEBUG;
 import static nl.ronmoeijes.Name.createName;
 
 class Product {
-    final String name;
     private final String id;
-    private final boolean isCrop;
+    private final Map<Product, Integer> ingredients;
     private int price;
-    private final int time;
-    private final Map<Object, Object> ingredients;
+    private final String name;
+    private int time;
+    private int tier;
+    private Map<Product, Integer> crops;
 
+    // Crop constructor
     Product(String id, int time, int price){
         this(id, time, price, new HashMap<>());
     }
 
-    Product(String id, int time, Map<Object, Object> ingredients){
+    // Product constructor
+    Product(String id, int time, Map<Product, Integer> ingredients) {
         this(id, time, 0, ingredients);
     }
 
-    private Product(String id, int time, int price, Map<Object, Object> ingredients){
+    private Product(String id, int time, int price, Map<Product, Integer> ingredients) {
         this.id = id;
         this.name = createName(id);
         this.price = price;
         this.time = time;
         this.ingredients = ingredients;
         if (!ingredients.isEmpty()){
-            isCrop = false;
-            for(Map.Entry<Object, Object> entry: ingredients.entrySet()) {
-                this.price += (Integer) entry.getValue();
-            }
-        } else { isCrop = true; }
+            updateTime();
+            updatePrice();
+            tier = 1;
+            updateTier();
+            crops = determineCrops(new HashMap<>(), 1, 0);
+        } else {
+            tier = 0;
+        }
     }
 
     public String toString() {
         return name;
     }
 
-    String getId() {
+    private void updateTime() {
+        for (Map.Entry<Product, Integer> ingredient : ingredients.entrySet()) {
+            this.time += ingredient.getKey().time * ingredient.getValue();
+        }
+    }
+
+    private void updatePrice() {
+        for (Map.Entry<Product, Integer> ingredient : ingredients.entrySet()) {
+            this.price += ingredient.getKey().price * ingredient.getValue();
+        }
+    }
+
+    private void updateTier() {
+        for (Map.Entry<Product, Integer> ingredient : ingredients.entrySet()) {
+            if (ingredient.getKey().tier > this.tier) {
+                this.tier = ingredient.getKey().tier;
+            }
+        }
+    }
+
+    private String getId() {
         return id;
     }
 
@@ -51,34 +78,39 @@ class Product {
 //        return total_time;
 //    }
 
-    private Map<String, Integer> determineCrops(Map<String, Integer> crops, int multi, int depth) {
-        for(Map.Entry<Object, Object> entry: ingredients.entrySet()) {
+    private Map<Product, Integer> determineCrops(Map<Product, Integer> crops, int multi, int depth) {
+        if (DEBUG) {
+            System.out.println(name);
+            System.out.println("================================================");
+        }
+        for (Map.Entry<Product, Integer> ingredient : ingredients.entrySet()) {
             if (depth == 0) { multi = 1; }
-            String str = entry.getKey().toString();
-            Product p = (Product) entry.getKey();
+            Product product = ingredient.getKey();
             if (DEBUG) {
-                System.out.println("Current key = " + str);
-                System.out.println("Current value = " + entry.getValue());
+                System.out.println("Current ingredient = " + ingredient);
+                System.out.println("Current key (Product) = " + product.getId());
+                System.out.println("Current value (amount) = " + ingredient.getValue());
                 System.out.println("Current multiplier = " + multi);
-                System.out.println("Is a crop = " + p.isCrop);
-                System.out.println("Already in crops " + crops.containsKey(str));
+                System.out.println("Current tier = " + product.tier);
+                System.out.println("Is a crop = " + ((product.tier == 0) ? "True" : "False"));
+                System.out.println("Already in crops = " + crops.containsKey(product));
             }
-            if (p.isCrop && !crops.containsKey(str)) {
-                crops.put(str, (Integer) entry.getValue()*multi);
-            } else if (crops.containsKey(str)) {
-                    crops.replace(str, crops.get(str) + (Integer) entry.getValue()*multi);
-            } else if (!p.ingredients.isEmpty()){
-                multi *= (Integer) entry.getValue();
+            if (product.tier == 0 && !crops.containsKey(product)) {
+                crops.put(product, ingredient.getValue() * multi);
+            } else if (crops.containsKey(product)) {
+                crops.replace(product, crops.get(product) + ingredient.getValue() * multi);
+            } else if (!product.ingredients.isEmpty()) {
+                multi *= ingredient.getValue();
                 depth += 1;
                 if (DEBUG) {
-                    System.out.println(">>Going inside \"" + str + "\"-loop...");
+                    System.out.println(">>Going inside \"" + product.getId() + "\"-loop...");
                     System.out.println(">>Current depth: " + depth);
                 }
-                p.determineCrops(crops, multi, depth);
+                product.determineCrops(crops, multi, depth);
             }
             if (depth > 0) { depth -= 1; }
             if (DEBUG) {
-                System.out.println("<<\"" + str + "\"-loop completed, results: " + crops);
+                System.out.println("<<\"" + product.getId() + "\"-loop completed, results: " + crops);
                 System.out.println("<<Current depth: " + depth);
                 System.out.println("------------------------------------------------");
             }
@@ -87,31 +119,19 @@ class Product {
     }
 
     void printCrops() {
-        Map<String, Integer> crops = determineCrops(new HashMap<>(), 1, 0);
         System.out.println(crops);
     }
 
-    static Map<Object, Object> setIngredients(Object ... l) {
-        Map<Object, Object> ingredients = new HashMap<>();
-        for (int i = 0;i < l.length;i+=2) {
-            if (l[i] instanceof Product && l[i+1] instanceof Integer) {
-                ingredients.put(l[i], l[i + 1]);
-            } else if (!(l[i] instanceof Product)) { throw new IllegalArgumentException("Your key was not a Product");
-            } else if (!(l[i+1] instanceof Integer)) { throw new IllegalArgumentException("Your value was not an int"); }
-        }
-        return ingredients;
-    }
-
-    void printProperties(){
+    void printAttributes() {
         System.out.println("Name: "+name);
         System.out.println("ID: "+id);
-//        System.out.println("Tier: "+tier);
+        System.out.println("Tier: " + tier);
         System.out.println("Price: "+price);
         System.out.println("Production time: "+time+"m");
 //        System.out.println("Total production time: "+totalTime()+"m");
         System.out.println("Ingredients: ");
-        for(Map.Entry<Object, Object> entry: ingredients.entrySet()) {
-            System.out.println(entry.getValue()+"x "+entry.getKey());
+        for (Map.Entry<Product, Integer> ingredient : ingredients.entrySet()) {
+            System.out.println(ingredient.getValue() + "x " + ingredient.getKey());
         }
     }
 }
